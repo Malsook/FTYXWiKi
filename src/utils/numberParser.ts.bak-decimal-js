@@ -1,11 +1,4 @@
-import Decimal from 'decimal.js'
-
-Decimal.set({
-  precision: 80,
-  rounding: Decimal.ROUND_HALF_UP,
-})
-
-export function parseExpression(input: string | undefined): Decimal {
+export function parseExpression(input: string | undefined): number {
   const source = String(input ?? '').trim()
 
   if (!source) {
@@ -56,7 +49,9 @@ export function parseExpression(input: string | undefined): Decimal {
     return source.slice(start, index)
   }
 
-  const readNumberLiteral = (): string => {
+  const parseNumberWithUnit = (): number => {
+    skipSpaces()
+
     const start = index
     let hasDot = false
     let hasDigit = false
@@ -79,66 +74,30 @@ export function parseExpression(input: string | undefined): Decimal {
       throw new Error('missing number')
     }
 
-    const exponentStart = index
-
-    if (source.charAt(index) === 'e' || source.charAt(index) === 'E') {
-      let cursor = index + 1
-
-      if (source.charAt(cursor) === '+' || source.charAt(cursor) === '-') {
-        cursor += 1
-      }
-
-      let hasExponentDigit = false
-
-      while (cursor < source.length) {
-        const char = source.charAt(cursor)
-
-        if (char >= '0' && char <= '9') {
-          hasExponentDigit = true
-          cursor += 1
-        } else {
-          break
-        }
-      }
-
-      if (hasExponentDigit) {
-        index = cursor
-      } else {
-        index = exponentStart
-      }
-    }
-
-    return source.slice(start, index)
-  }
-
-  const parseNumberWithUnit = (): Decimal => {
-    skipSpaces()
-
-    let value = new Decimal(readNumberLiteral())
+    let value = Number(source.slice(start, index))
 
     skipSpaces()
 
     const unit = readUnit()
 
     if (unit) {
-      value = value.times(new Decimal(10).pow(getUnitExponent(unit)))
+      value *= Math.pow(10, getUnitExponent(unit))
     }
 
     skipSpaces()
 
     if (match('%')) {
-      value = value.div(100)
+      value /= 100
     }
 
     return value
   }
 
-  const parsePrimary = (): Decimal => {
+  const parsePrimary = (): number => {
     skipSpaces()
 
     if (match('(')) {
       const value = parseAddSub()
-
       skipSpaces()
 
       if (!match(')')) {
@@ -151,7 +110,7 @@ export function parseExpression(input: string | undefined): Decimal {
     return parseNumberWithUnit()
   }
 
-  const parseUnary = (): Decimal => {
+  const parseUnary = (): number => {
     skipSpaces()
 
     if (match('+')) {
@@ -159,34 +118,34 @@ export function parseExpression(input: string | undefined): Decimal {
     }
 
     if (match('-')) {
-      return parseUnary().neg()
+      return -parseUnary()
     }
 
     return parsePrimary()
   }
 
-  const parsePower = (): Decimal => {
+  const parsePower = (): number => {
     let value = parseUnary()
 
     skipSpaces()
 
     if (match('^')) {
-      value = value.pow(parsePower())
+      value = Math.pow(value, parsePower())
     }
 
     return value
   }
 
-  const parseMulDiv = (): Decimal => {
+  const parseMulDiv = (): number => {
     let value = parsePower()
 
     while (true) {
       skipSpaces()
 
       if (match('*')) {
-        value = value.times(parsePower())
+        value *= parsePower()
       } else if (match('/')) {
-        value = value.div(parsePower())
+        value /= parsePower()
       } else {
         break
       }
@@ -195,16 +154,16 @@ export function parseExpression(input: string | undefined): Decimal {
     return value
   }
 
-  function parseAddSub(): Decimal {
+  function parseAddSub(): number {
     let value = parseMulDiv()
 
     while (true) {
       skipSpaces()
 
       if (match('+')) {
-        value = value.plus(parseMulDiv())
+        value += parseMulDiv()
       } else if (match('-')) {
-        value = value.minus(parseMulDiv())
+        value -= parseMulDiv()
       } else {
         break
       }
@@ -224,14 +183,12 @@ export function parseExpression(input: string | undefined): Decimal {
   return result
 }
 
-export function ensureFinite(value: Decimal.Value): Decimal {
-  const decimal = value instanceof Decimal ? value : new Decimal(value)
-
-  if (!decimal.isFinite()) {
+export function ensureFinite(value: number): number {
+  if (!Number.isFinite(value)) {
     throw new Error('invalid number')
   }
 
-  return decimal
+  return value
 }
 
 function getUnitExponent(unit: string): number {

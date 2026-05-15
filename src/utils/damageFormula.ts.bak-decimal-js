@@ -1,5 +1,3 @@
-import Decimal from 'decimal.js'
-
 import {
   corrosionRuneValues,
   critRuneValues,
@@ -10,16 +8,13 @@ import {
 import type { CalculatorState, CalcResult, RuneKey, RuneQualityKey } from '@/types/damage'
 import { ensureFinite, parseExpression } from '@/utils/numberParser'
 
-const D0 = new Decimal(0)
-const D1 = new Decimal(1)
-const D100 = new Decimal(100)
-
 export function calculateBaseDamage(calculator: CalculatorState): CalcResult {
   const attack = readNumber(calculator, 'attack')
   const penetration = readNumber(calculator, 'penetration')
   const critDamage = readMultiplier(calculator, 'critDamage')
   const skillRate = readMultiplier(calculator, 'skillRate')
   const enemyDefense = readNumber(calculator, 'enemyDefense')
+
   const ignoreDefense = readOptionalRatio(calculator, 'ignoreDefense')
   const reduceDefense = readOptionalRatio(calculator, 'reduceDefense')
   const reduceResistance = readOptionalNumber(calculator, 'reduceResistance')
@@ -27,30 +22,41 @@ export function calculateBaseDamage(calculator: CalculatorState): CalcResult {
   const enemyAllResistance = readOptionalNumber(calculator, 'enemyAllResistance')
 
   const unityBonus = calculator.enabled.unityLevel
-    ? new Decimal('1.05').pow(readLevel(calculator, 'unityLevel'))
-    : D1
+    ? Math.pow(1.05, readLevel(calculator, 'unityLevel'))
+    : 1
+
   const magicBonus = calculator.enabled.magicLevel
     ? calculateMagicBonus(readLevel(calculator, 'magicLevel'))
-    : D1
+    : 1
+
   const petBonus = calculator.enabled.petBonusDirect
     ? readOptionalBonusMultiplier(calculator, 'petBonusDirect')
     : calculator.enabled.petLevel
-      ? new Decimal('1.01').pow(readLevel(calculator, 'petLevel'))
-      : D1
+      ? Math.pow(1.01, readLevel(calculator, 'petLevel'))
+      : 1
+
   const mechBonus = readOptionalBonusMultiplier(calculator, 'mechBonus')
   const skinBonus = readOptionalBonusMultiplier(calculator, 'skinBonus')
   const guildPenBonus = readOptionalBonusMultiplier(calculator, 'guildPenBonus')
   const guildCritBonus = readOptionalBonusMultiplier(calculator, 'guildCritBonus')
   const mainAttackBuff = readOptionalBonusMultiplier(calculator, 'mainAttackBuff')
 
-  const finalAttack = attack.times(mainAttackBuff)
-  const finalCritDamage = critDamage.times(guildCritBonus)
-  const finalPenetration = penetration.times(guildPenBonus)
-  const finalEnemyDefense = enemyDefense.times(D1.minus(ignoreDefense)).times(D1.minus(reduceDefense))
-  const penetrationDefenseCoef = calculatePenetrationDefenseCoef(finalPenetration, finalEnemyDefense)
-  const finalResistance = enemyResistance.plus(enemyAllResistance).minus(reduceResistance)
+  const finalAttack = attack * mainAttackBuff
+  const finalCritDamage = critDamage * guildCritBonus
+  const finalPenetration = penetration * guildPenBonus
+
+  const finalEnemyDefense = enemyDefense * (1 - ignoreDefense) * (1 - reduceDefense)
+
+  const penetrationDefenseCoef = calculatePenetrationDefenseCoef(
+    finalPenetration,
+    finalEnemyDefense,
+  )
+
+  const finalResistance = enemyResistance + enemyAllResistance - reduceResistance
+
   const resistanceCoef = calculateResistanceCoef(finalResistance)
-  const otherMultiplier = unityBonus.times(magicBonus).times(petBonus).times(mechBonus).times(skinBonus)
+
+  const otherMultiplier = unityBonus * magicBonus * petBonus * mechBonus * skinBonus
 
   return createValidResult({
     finalAttack,
@@ -71,42 +77,43 @@ export function calculateAbyssDamage(calculator: CalculatorState): CalcResult {
   const critDamage = readMultiplier(calculator, 'critDamage')
   const skillRate = readMultiplier(calculator, 'skillRate')
   const enemyDefense = readNumber(calculator, 'enemyDefense')
+
   const ignoreDefense = readOptionalRatio(calculator, 'ignoreDefense')
   const reduceDefense = readOptionalRatio(calculator, 'reduceDefense')
   const reduceResistance = readOptionalNumber(calculator, 'reduceResistance')
   const enemyResistance = readOptionalNumber(calculator, 'enemyResistance')
 
-  const attackRuneBonus = D1.plus(readRuneValue(calculator, 'attack'))
-  const penetrationRuneBonus = D1.plus(readRuneValue(calculator, 'penetration'))
-  const critRuneBonus = D1.plus(readRuneValue(calculator, 'critDamage'))
+  const attackRuneBonus = 1 + readRuneValue(calculator, 'attack')
+  const penetrationRuneBonus = 1 + readRuneValue(calculator, 'penetration')
+  const critRuneBonus = 1 + readRuneValue(calculator, 'critDamage')
+
   const bloodRuneValue = readRuneValue(calculator, 'blood')
   const armorRuneValue = readRuneValue(calculator, 'armor')
 
-  const armorRuneCoef = Decimal.min(
-    D1.minus(new Decimal('0.2').pow(armorRuneValue.div(600))),
-    new Decimal('0.8'),
-  )
-  const bloodRuneCoef = Decimal.min(
-    D1.minus(new Decimal('0.2').pow(bloodRuneValue.div(600))),
-    new Decimal('0.8'),
-  )
+  const armorRuneCoef = Math.min(1 - Math.pow(0.2, armorRuneValue / 600), 0.8)
+  const bloodRuneCoef = Math.min(1 - Math.pow(0.2, bloodRuneValue / 600), 0.8)
+
   const petBonus = calculator.enabled.petBonusDirect
     ? readOptionalBonusMultiplier(calculator, 'petBonusDirect')
     : calculator.enabled.petLevel
-      ? new Decimal('1.01').pow(readLevel(calculator, 'petLevel'))
-      : D1
+      ? Math.pow(1.01, readLevel(calculator, 'petLevel'))
+      : 1
 
-  const finalAttack = attack.times(attackRuneBonus)
-  const finalCritDamage = critDamage.times(critRuneBonus)
-  const finalPenetration = penetration.times(penetrationRuneBonus)
-  const finalEnemyDefense = enemyDefense
-    .times(D1.minus(ignoreDefense))
-    .times(D1.minus(reduceDefense))
-    .times(D1.minus(armorRuneCoef))
-  const penetrationDefenseCoef = calculatePenetrationDefenseCoef(finalPenetration, finalEnemyDefense)
-  const resistanceCoef = calculateResistanceCoef(enemyResistance.minus(reduceResistance))
-  const bloodBonus = D1.div(D1.minus(bloodRuneCoef))
-  const otherMultiplier = petBonus.times(bloodBonus)
+  const finalAttack = attack * attackRuneBonus
+  const finalCritDamage = critDamage * critRuneBonus
+  const finalPenetration = penetration * penetrationRuneBonus
+
+  const finalEnemyDefense =
+    enemyDefense * (1 - ignoreDefense) * (1 - reduceDefense) * (1 - armorRuneCoef)
+
+  const penetrationDefenseCoef = calculatePenetrationDefenseCoef(
+    finalPenetration,
+    finalEnemyDefense,
+  )
+
+  const resistanceCoef = calculateResistanceCoef(enemyResistance - reduceResistance)
+  const bloodBonus = 1 / (1 - bloodRuneCoef)
+  const otherMultiplier = petBonus * bloodBonus
 
   return createValidResult({
     finalAttack,
@@ -115,8 +122,8 @@ export function calculateAbyssDamage(calculator: CalculatorState): CalcResult {
     penetrationDefenseCoef,
     resistanceCoef,
     otherMultiplier,
-    unityBonus: D1,
-    magicBonus: D1,
+    unityBonus: 1,
+    magicBonus: 1,
     petBonus,
   })
 }
@@ -124,15 +131,15 @@ export function calculateAbyssDamage(calculator: CalculatorState): CalcResult {
 export function createInvalidResult(errorMessage = ''): CalcResult {
   return {
     valid: false,
-    normalAttackDamage: D0,
-    critAttackDamage: D0,
-    normalSkillDamage: D0,
-    critSkillDamage: D0,
-    penetrationDefenseCoef: D0,
-    resistanceCoef: D0,
-    unityBonus: D0,
-    magicBonus: D0,
-    petBonus: D0,
+    normalAttackDamage: 0,
+    critAttackDamage: 0,
+    normalSkillDamage: 0,
+    critSkillDamage: 0,
+    penetrationDefenseCoef: 0,
+    resistanceCoef: 0,
+    unityBonus: 0,
+    magicBonus: 0,
+    petBonus: 0,
     errorMessage,
   }
 }
@@ -142,15 +149,15 @@ export function getRuneCountKey(runeKey: RuneKey, qualityKey: RuneQualityKey): s
 }
 
 function createValidResult(params: {
-  finalAttack: Decimal
-  finalCritDamage: Decimal
-  skillRate: Decimal
-  penetrationDefenseCoef: Decimal
-  resistanceCoef: Decimal
-  otherMultiplier: Decimal
-  unityBonus?: Decimal
-  magicBonus?: Decimal
-  petBonus?: Decimal
+  finalAttack: number
+  finalCritDamage: number
+  skillRate: number
+  penetrationDefenseCoef: number
+  resistanceCoef: number
+  otherMultiplier: number
+  unityBonus?: number
+  magicBonus?: number
+  petBonus?: number
 }): CalcResult {
   const {
     finalAttack,
@@ -159,22 +166,19 @@ function createValidResult(params: {
     penetrationDefenseCoef,
     resistanceCoef,
     otherMultiplier,
-    unityBonus = D1,
-    magicBonus = D1,
-    petBonus = D1,
+    unityBonus = 1,
+    magicBonus = 1,
+    petBonus = 1,
   } = params
 
-  const baseDamage = finalAttack
-    .times(penetrationDefenseCoef)
-    .times(resistanceCoef)
-    .times(otherMultiplier)
+  const baseDamage = finalAttack * penetrationDefenseCoef * resistanceCoef * otherMultiplier
 
   return {
     valid: true,
     normalAttackDamage: baseDamage,
-    critAttackDamage: baseDamage.times(finalCritDamage),
-    normalSkillDamage: baseDamage.times(skillRate),
-    critSkillDamage: baseDamage.times(finalCritDamage).times(skillRate),
+    critAttackDamage: baseDamage * finalCritDamage,
+    normalSkillDamage: baseDamage * skillRate,
+    critSkillDamage: baseDamage * finalCritDamage * skillRate,
     penetrationDefenseCoef,
     resistanceCoef,
     unityBonus,
@@ -183,29 +187,29 @@ function createValidResult(params: {
   }
 }
 
-function calculatePenetrationDefenseCoef(finalPenetration: Decimal, finalDefense: Decimal): Decimal {
-  if (finalDefense.lt(0)) {
+function calculatePenetrationDefenseCoef(finalPenetration: number, finalDefense: number): number {
+  if (finalDefense < 0) {
     throw new Error('invalid defense')
   }
 
-  if (finalPenetration.gte(finalDefense)) {
-    return D1.plus(new Decimal('0.01').times(finalPenetration.minus(finalDefense).sqrt()))
+  if (finalPenetration >= finalDefense) {
+    return 1 + 0.01 * Math.sqrt(finalPenetration - finalDefense)
   }
 
-  return D1.div(D1.plus(new Decimal('0.01').times(finalDefense.minus(finalPenetration))))
+  return 1 / (1 + 0.01 * (finalDefense - finalPenetration))
 }
 
-function calculateResistanceCoef(resistance: Decimal): Decimal {
+function calculateResistanceCoef(resistance: number): number {
   const points = [
-    { value: '-75', coef: '0.535' },
-    { value: '-50', coef: '0.636' },
-    { value: '-25', coef: '0.784' },
-    { value: '-20', coef: '0.821' },
-    { value: '0', coef: '1' },
-    { value: '20', coef: '1.179' },
-    { value: '25', coef: '1.216' },
-    { value: '50', coef: '1.364' },
-    { value: '75', coef: '1.465' },
+    { value: -75, coef: 0.535 },
+    { value: 50, coef: 0.636 },
+    { value: 25, coef: 0.784 },
+    { value: 20, coef: 0.821 },
+    { value: 0, coef: 1 },
+    { value: -20, coef: 1.179 },
+    { value: -25, coef: 1.216 },
+    { value: -50, coef: 1.364 },
+    { value: -75, coef: 1.465 },
   ]
 
   const normalizedResistance = normalizeDecimal(resistance)
@@ -215,89 +219,88 @@ function calculateResistanceCoef(resistance: Decimal): Decimal {
     throw new Error('当前属性抵抗修正系数未知，请输入正确属性抵抗')
   }
 
-  return new Decimal(point.coef)
+  return point.coef
 }
 
-function normalizeDecimal(value: Decimal): string {
-  return value.toDecimalPlaces(12).toString()
+function normalizeDecimal(value: number): number {
+  return Number(value.toFixed(12))
 }
 
-function calculateMagicBonus(level: Decimal): Decimal {
-  const group = level.div(50).floor()
-  const rest = level.mod(50)
-  const groupMultiplier = new Decimal('1.2').pow(group)
-  const addition = new Decimal('12.5')
-    .times(groupMultiplier.minus(1))
-    .plus(new Decimal('0.05').times(rest).times(groupMultiplier))
+function calculateMagicBonus(level: number): number {
+  const group = Math.floor(level / 50)
+  const rest = level % 50
+  const groupMultiplier = Math.pow(1.2, group)
 
-  return D1.plus(addition)
+  const addition = 12.5 * (groupMultiplier - 1) + 0.05 * rest * groupMultiplier
+
+  return 1 + addition
 }
 
-function readNumber(calculator: CalculatorState, key: string): Decimal {
+function readNumber(calculator: CalculatorState, key: string): number {
   return ensureFinite(parseExpression(calculator.values[key]))
 }
 
-function readOptionalNumber(calculator: CalculatorState, key: string): Decimal {
+function readOptionalNumber(calculator: CalculatorState, key: string): number {
   if (!calculator.enabled[key]) {
-    return D0
+    return 0
   }
 
   return readNumber(calculator, key)
 }
 
-function readMultiplier(calculator: CalculatorState, key: string): Decimal {
+function readMultiplier(calculator: CalculatorState, key: string): number {
   const value = ensureFinite(parseExpression(calculator.values[key]))
 
-  if (value.lt(0)) {
+  if (value < 0) {
     throw new Error('invalid multiplier')
   }
 
   return value
 }
 
-function readOptionalBonusMultiplier(calculator: CalculatorState, key: string): Decimal {
+function readOptionalBonusMultiplier(calculator: CalculatorState, key: string): number {
   if (!calculator.enabled[key]) {
-    return D1
+    return 1
   }
 
   const raw = calculator.values[key] ?? ''
   const parsed = ensureFinite(parseExpression(raw))
-  const value = raw.includes('%') ? D1.plus(parsed) : parsed
+  const value = raw.includes('%') ? 1 + parsed : parsed
 
-  if (value.lt(0)) {
+  if (value < 0) {
     throw new Error('invalid bonus multiplier')
   }
 
   return value
 }
 
-function readOptionalRatio(calculator: CalculatorState, key: string): Decimal {
+function readOptionalRatio(calculator: CalculatorState, key: string): number {
   if (!calculator.enabled[key]) {
-    return D0
+    return 0
   }
 
   const raw = calculator.values[key] ?? ''
   const parsed = ensureFinite(parseExpression(raw))
-  const value = raw.includes('%') ? parsed : parsed.gt(1) ? parsed.div(D100) : parsed
+  const value = raw.includes('%') ? parsed : parsed > 1 ? parsed / 100 : parsed
 
-  if (value.lt(0) || value.gt(1)) {
+  if (value < 0 || value > 1) {
     throw new Error('invalid ratio')
   }
 
   return value
 }
 
-function readLevel(calculator: CalculatorState, key: string): Decimal {
+function readLevel(calculator: CalculatorState, key: string): number {
   const value = ensureFinite(parseExpression(calculator.values[key]))
 
-  if (value.lt(0) || !value.isInteger()) {
+  if (value < 0 || !Number.isInteger(value)) {
     throw new Error('invalid level')
   }
 
   return value
 }
 
-function readRuneValue(calculator: CalculatorState, runeKey: RuneKey): Decimal {
+function readRuneValue(calculator: CalculatorState, runeKey: RuneKey): number {
   const rune = runeGroups.find((item) => item.key === runeKey)
 
   if (!rune) {
@@ -309,29 +312,29 @@ function readRuneValue(calculator: CalculatorState, runeKey: RuneKey): Decimal {
   if (directValue) {
     const value = ensureFinite(parseExpression(directValue))
 
-    if (value.lt(0)) {
+    if (value < 0) {
       throw new Error('invalid rune value')
     }
 
     return value
   }
 
-  let total = D0
+  let total = 0
 
   for (const quality of runeQualities) {
     const countRaw = calculator.values[getRuneCountKey(runeKey, quality.key)] ?? '0'
     const count = ensureFinite(parseExpression(countRaw))
 
-    if (count.lt(0) || !count.isInteger()) {
+    if (count < 0 || !Number.isInteger(count)) {
       throw new Error('invalid rune count')
     }
 
     if (runeKey === 'attack' || runeKey === 'penetration') {
-      total = total.plus(count.times(percentRuneValues[quality.key]))
+      total += count * percentRuneValues[quality.key]
     } else if (runeKey === 'critDamage') {
-      total = total.plus(count.times(critRuneValues[quality.key]))
+      total += count * critRuneValues[quality.key]
     } else {
-      total = total.plus(count.times(corrosionRuneValues[quality.key]))
+      total += count * corrosionRuneValues[quality.key]
     }
   }
 

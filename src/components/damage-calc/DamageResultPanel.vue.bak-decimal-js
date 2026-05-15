@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import type { CalculatorType, CalcResult, DecimalValue, OutputMode } from '@/types/damage'
+import type { CalculatorType, CalcResult, OutputMode } from '@/types/damage'
 import { formatByOutputMode } from '@/utils/numberFormat'
 
 const props = defineProps<{
@@ -76,7 +76,7 @@ const props = defineProps<{
   outputMode: OutputMode
 }>()
 
-function formatDamage(value: DecimalValue): string {
+function formatDamage(value: number): string {
   if (!props.result.valid) {
     return '-'
   }
@@ -92,7 +92,7 @@ function formatScientificNumber(value: number): string {
   return value.toExponential(3)
 }
 
-function formatSupplement(value: DecimalValue): string {
+function formatSupplement(value: number): string {
   if (!props.result.valid) {
     return '-'
   }

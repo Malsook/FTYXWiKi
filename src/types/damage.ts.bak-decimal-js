@@ -1,7 +1,3 @@
-import type Decimal from 'decimal.js'
-
-export type DecimalValue = Decimal.Value
-
 export type CalculatorType = 'base' | 'abyss'
 
 export type OutputMode = 'number' | 'unit'
@@ -31,15 +27,16 @@ export type DamageCalcState = {
 
 export type CalcResult = {
   valid: boolean
-  normalAttackDamage: DecimalValue
-  critAttackDamage: DecimalValue
-  normalSkillDamage: DecimalValue
-  critSkillDamage: DecimalValue
-  penetrationDefenseCoef: DecimalValue
-  resistanceCoef: DecimalValue
-  unityBonus: DecimalValue
-  magicBonus: DecimalValue
-  petBonus: DecimalValue
+  normalAttackDamage: number
+  critAttackDamage: number
+  normalSkillDamage: number
+  critSkillDamage: number
+  penetrationDefenseCoef: number
+  resistanceCoef: number
+  unityBonus: number
+  magicBonus: number
+  petBonus: number
+
   errorMessage?: string
 }
 

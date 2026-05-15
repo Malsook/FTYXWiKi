@@ -1,37 +1,72 @@
+import Decimal from 'decimal.js'
+
 import type { OutputMode } from '@/types/damage'
 
-export function formatByOutputMode(value: number, mode: OutputMode): string {
+export function formatByOutputMode(value: Decimal.Value, mode: OutputMode): string {
   return mode === 'unit' ? formatGameUnit(value) : formatPlainNumber(value)
 }
 
-export function formatPlainNumber(value: number): string {
-  if (!Number.isFinite(value)) {
+export function formatPlainNumber(value: Decimal.Value): string {
+  const decimal = toDecimal(value)
+
+  if (!decimal.isFinite()) {
     return '-'
   }
 
-  return value.toLocaleString('en-US', {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
-  })
+  const absValue = decimal.abs()
+
+  if (!absValue.isZero() && absValue.gte('1e21')) {
+    return decimal.toExponential(3)
+  }
+
+  return decimal.toFixed(3)
 }
 
-export function formatGameUnit(value: number): string {
-  if (!Number.isFinite(value)) {
+export function formatScientific(value: Decimal.Value, digits = 3): string {
+  const decimal = toDecimal(value)
+
+  if (!decimal.isFinite()) {
     return '-'
   }
 
-  const sign = value < 0 ? '-' : ''
-  const absValue = Math.abs(value)
+  return decimal.toExponential(digits)
+}
 
-  if (absValue < 1000) {
+export function formatGameUnit(value: Decimal.Value): string {
+  const decimal = toDecimal(value)
+
+  if (!decimal.isFinite()) {
+    return '-'
+  }
+
+  const sign = decimal.isNeg() ? '-' : ''
+  const absValue = decimal.abs()
+
+  if (absValue.lt(1000)) {
     return `${sign}${absValue.toFixed(3)}`
   }
 
-  const tier = Math.floor(Math.log10(absValue) / 3)
+  const exponent = getBase10Exponent(absValue)
+  const tier = Math.floor(exponent / 3)
   const unit = getUnitByTier(tier)
-  const scaled = absValue / Math.pow(10, tier * 3)
+  const scaled = absValue.div(new Decimal(10).pow(tier * 3))
 
   return `${sign}${scaled.toFixed(3)}${unit}`
+}
+
+function toDecimal(value: Decimal.Value): Decimal {
+  return value instanceof Decimal ? value : new Decimal(value)
+}
+
+function getBase10Exponent(value: Decimal): number {
+  const [, exponentRaw = '0'] = value.toExponential(16).split('e')
+  const exponent = Number(exponentRaw)
+
+  if (!Number.isFinite(exponent)) {
+    throw new Error('invalid exponent')
+  }
+
+  return exponent
 }
 
 function getUnitByTier(tier: number): string {
