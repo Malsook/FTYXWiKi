@@ -36,8 +36,6 @@ export type CalcResult = {
   unityBonus: number
   magicBonus: number
   petBonus: number
-
-  errorMessage?: string
 }
 
 export type RuneKey = 'attack' | 'penetration' | 'critDamage' | 'blood' | 'armor'

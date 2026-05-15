@@ -202,6 +202,7 @@ export const abyssFields: FieldConfig[] = [
     label: '宠物等级',
     defaultValue: '0',
     kind: 'level',
+    optional: true,
   },
   {
     key: 'petBonusDirect',

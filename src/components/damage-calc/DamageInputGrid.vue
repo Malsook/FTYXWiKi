@@ -6,7 +6,6 @@
           <div class="field-head">
             <span class="field-label" :title="field.label">
               {{ field.label }}
-              <span v-if="field.optional" class="optional-mark">*</span>
             </span>
 
             <a-switch
@@ -88,9 +87,6 @@ function handleEnabledChange(key: string, enabled: boolean) {
   white-space: nowrap;
 }
 
-.optional-mark {
-  color: #ff4d4f;
-}
 
 .compact-input :deep(input) {
   min-width: 0;

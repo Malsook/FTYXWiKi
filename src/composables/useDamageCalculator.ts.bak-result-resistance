@@ -37,9 +37,8 @@ export function useDamageCalculator() {
       return activeCalculator.value.type === 'base'
         ? calculateBaseDamage(activeCalculator.value)
         : calculateAbyssDamage(activeCalculator.value)
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '计算参数无效'
-      return createInvalidResult(errorMessage)
+    } catch {
+      return createInvalidResult()
     }
   })
 

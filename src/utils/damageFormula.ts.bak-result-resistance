@@ -128,7 +128,7 @@ export function calculateAbyssDamage(calculator: CalculatorState): CalcResult {
   })
 }
 
-export function createInvalidResult(errorMessage = ''): CalcResult {
+export function createInvalidResult(): CalcResult {
   return {
     valid: false,
     normalAttackDamage: 0,
@@ -140,7 +140,6 @@ export function createInvalidResult(errorMessage = ''): CalcResult {
     unityBonus: 0,
     magicBonus: 0,
     petBonus: 0,
-    errorMessage,
   }
 }
 
@@ -205,25 +204,34 @@ function calculateResistanceCoef(resistance: number): number {
     { value: -50, coef: 0.636 },
     { value: -25, coef: 0.784 },
     { value: -20, coef: 0.821 },
-    { value: 0, coef: 1 },
     { value: 20, coef: 1.179 },
     { value: 25, coef: 1.216 },
     { value: 50, coef: 1.364 },
     { value: 75, coef: 1.465 },
   ]
 
-  const normalizedResistance = normalizeDecimal(resistance)
-  const point = points.find((item) => item.value === normalizedResistance)
+  const first = points[0]!
+  const last = points[points.length - 1]!
 
-  if (!point) {
-    throw new Error('当前属性抵抗修正系数未知，请输入正确属性抵抗')
+  if (resistance <= first.value) {
+    return first.coef
   }
 
-  return point.coef
-}
+  if (resistance >= last.value) {
+    return last.coef
+  }
 
-function normalizeDecimal(value: number): number {
-  return Number(value.toFixed(12))
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const left = points[index]!
+    const right = points[index + 1]!
+
+    if (resistance >= left.value && resistance <= right.value) {
+      const ratio = (resistance - left.value) / (right.value - left.value)
+      return left.coef + (right.coef - left.coef) * ratio
+    }
+  }
+
+  return 1
 }
 
 function calculateMagicBonus(level: number): number {
