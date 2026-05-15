@@ -60,31 +60,14 @@ function toDecimal(value: Decimal.Value): Decimal {
 
 function getBase10Exponent(value: Decimal): number {
   const [, exponentRaw = '0'] = value.toExponential(16).split('e')
-  const exponent = Number(exponentRaw)
-
-  if (!Number.isFinite(exponent)) {
-    throw new Error('invalid exponent')
-  }
-
-  return exponent
+  return Number(exponentRaw)
 }
 
 function getUnitByTier(tier: number): string {
-  if (tier === 1) {
-    return 'K'
-  }
-
-  if (tier === 2) {
-    return 'M'
-  }
-
-  if (tier === 3) {
-    return 'B'
-  }
-
-  if (tier === 4) {
-    return 'T'
-  }
+  if (tier === 1) return 'K'
+  if (tier === 2) return 'M'
+  if (tier === 3) return 'B'
+  if (tier === 4) return 'T'
 
   return getLetterUnitByIndex(tier - 4)
 }

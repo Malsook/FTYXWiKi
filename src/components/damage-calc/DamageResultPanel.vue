@@ -1,12 +1,12 @@
 <template>
   <a-card title="计算结果" class="result-card" size="small">
-  <a-alert
-    v-if="!result.valid && result.errorMessage"
-    class="result-error-alert"
-    type="warning"
-    show-icon
-    :message="result.errorMessage"
-  />
+    <a-alert
+      v-if="!result.valid && result.errorMessage"
+      class="result-error-alert"
+      type="warning"
+      show-icon
+      :message="result.errorMessage"
+    />
     <div class="damage-result-grid">
       <div class="result-item result-normal">
         <div class="result-label">非暴击普攻伤害</div>
@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import type { CalculatorType, CalcResult, DecimalValue, OutputMode } from '@/types/damage'
-import { formatByOutputMode } from '@/utils/numberFormat'
+import { formatByOutputMode, formatScientific } from '@/utils/numberFormat'
 
 const props = defineProps<{
   result: CalcResult
@@ -84,20 +84,12 @@ function formatDamage(value: DecimalValue): string {
   return formatByOutputMode(value, props.outputMode)
 }
 
-function formatScientificNumber(value: number): string {
-  if (!Number.isFinite(value)) {
-    return '-'
-  }
-
-  return value.toExponential(3)
-}
-
 function formatSupplement(value: DecimalValue): string {
   if (!props.result.valid) {
     return '-'
   }
 
-  return formatScientificNumber(value)
+  return formatScientific(value, 3)
 }
 </script>
 
