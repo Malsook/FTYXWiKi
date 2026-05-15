@@ -1,0 +1,261 @@
+import { computed, reactive, watch } from 'vue'
+import { message } from 'ant-design-vue'
+import {
+  abyssFields,
+  baseFields,
+  runeGroups,
+  runeQualities,
+  STORAGE_KEY,
+} from '@/constants/damageCalculator'
+import type {
+  CalculatorState,
+  CalculatorType,
+  DamageCalcState,
+  FieldConfig,
+  CalcResult,
+} from '@/types/damage'
+import {
+  calculateAbyssDamage,
+  calculateBaseDamage,
+  createInvalidResult,
+  getRuneCountKey,
+} from '@/utils/damageFormula'
+
+export function useDamageCalculator() {
+  const state = reactive<DamageCalcState>(loadState())
+
+  const activeCalculator = computed<CalculatorState>(() => {
+    return state.calculators[state.activeIndex] ?? state.calculators[0]!
+  })
+
+  const currentFields = computed<FieldConfig[]>(() => {
+    return activeCalculator.value.type === 'base' ? baseFields : abyssFields
+  })
+
+  const currentResult = computed<CalcResult>(() => {
+    try {
+      return activeCalculator.value.type === 'base'
+        ? calculateBaseDamage(activeCalculator.value)
+        : calculateAbyssDamage(activeCalculator.value)
+    } catch {
+      return createInvalidResult()
+    }
+  })
+
+  watch(
+    state,
+    () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    },
+    {
+      deep: true,
+    },
+  )
+
+  function setActiveIndex(index: number) {
+    state.activeIndex = index
+  }
+
+  function setCalculatorType(type: CalculatorType) {
+    activeCalculator.value.type = type
+  }
+
+  function resetCurrentCalculator() {
+    const type = activeCalculator.value.type
+    state.calculators[state.activeIndex] = createDefaultCalculator(type)
+    message.success('已重置当前计算器')
+  }
+
+  function resetAllCalculators() {
+    const fresh = createDefaultState()
+
+    state.activeIndex = fresh.activeIndex
+    state.outputMode = fresh.outputMode
+    state.calculators = fresh.calculators
+
+    message.success('已重置全部计算器')
+  }
+
+  async function copyCurrentCalculator() {
+    const keys = getAvailableKeys(activeCalculator.value.type)
+    const values: Record<string, string> = {}
+    const enabled: Record<string, boolean> = {}
+
+    for (const key of keys) {
+      values[key] = activeCalculator.value.values[key] ?? ''
+    }
+
+    for (const field of currentFields.value) {
+      if (field.optional) {
+        enabled[field.key] = Boolean(activeCalculator.value.enabled[field.key])
+      }
+    }
+
+    const payload = {
+      version: 1,
+      calculatorType: activeCalculator.value.type,
+      values,
+      enabled,
+    }
+
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+    message.success('已复制当前计算器参数')
+  }
+
+  async function pasteToCurrentCalculator() {
+    try {
+      const text = await navigator.clipboard.readText()
+      const parsed = JSON.parse(text) as {
+        values?: Record<string, unknown>
+        enabled?: Record<string, unknown>
+      }
+
+      const sourceValues = parsed.values ?? {}
+      const sourceEnabled = parsed.enabled ?? {}
+      const availableKeys = new Set(getAvailableKeys(activeCalculator.value.type))
+
+      for (const [key, value] of Object.entries(sourceValues)) {
+        if (availableKeys.has(key)) {
+          activeCalculator.value.values[key] = String(value ?? '')
+        }
+      }
+
+      for (const field of currentFields.value) {
+        if (!field.optional) {
+          continue
+        }
+
+        if (Object.prototype.hasOwnProperty.call(sourceEnabled, field.key)) {
+          activeCalculator.value.enabled[field.key] = Boolean(sourceEnabled[field.key])
+        } else if (Object.prototype.hasOwnProperty.call(sourceValues, field.key)) {
+          activeCalculator.value.enabled[field.key] = true
+        }
+      }
+
+      message.success('已粘贴可用参数')
+    } catch {
+      message.error('剪贴板内容不是有效的计算器参数')
+    }
+  }
+
+  function setFieldValue(key: string, value: string) {
+    activeCalculator.value.values[key] = value
+  }
+
+  function setFieldEnabled(key: string, enabled: boolean) {
+    activeCalculator.value.enabled[key] = enabled
+  }
+
+  return {
+    state,
+    activeCalculator,
+    currentFields,
+    currentResult,
+    setActiveIndex,
+    setCalculatorType,
+    resetCurrentCalculator,
+    resetAllCalculators,
+    copyCurrentCalculator,
+    pasteToCurrentCalculator,
+    setFieldValue,
+    setFieldEnabled,
+  }
+}
+
+function createDefaultCalculator(type: CalculatorType = 'base'): CalculatorState {
+  const values: Record<string, string> = {}
+  const enabled: Record<string, boolean> = {}
+
+  for (const field of [...baseFields, ...abyssFields]) {
+    values[field.key] = field.defaultValue
+
+    if (field.optional) {
+      enabled[field.key] = false
+    }
+  }
+
+  for (const rune of runeGroups) {
+    values[rune.directKey] = ''
+
+    for (const quality of runeQualities) {
+      values[getRuneCountKey(rune.key, quality.key)] = '0'
+    }
+  }
+
+  return {
+    type,
+    values,
+    enabled,
+  }
+}
+
+function createDefaultState(): DamageCalcState {
+  return {
+    activeIndex: 0,
+    outputMode: 'unit',
+    calculators: Array.from({ length: 10 }, () => createDefaultCalculator()),
+  }
+}
+
+function loadState(): DamageCalcState {
+  const defaultState = createDefaultState()
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+
+    if (!raw) {
+      return defaultState
+    }
+
+    const parsed = JSON.parse(raw) as Partial<DamageCalcState>
+
+    return {
+      activeIndex:
+        typeof parsed.activeIndex === 'number' && parsed.activeIndex >= 0 && parsed.activeIndex <= 9
+          ? parsed.activeIndex
+          : 0,
+      outputMode:
+        parsed.outputMode === 'number' || parsed.outputMode === 'unit' ? parsed.outputMode : 'unit',
+      calculators: Array.from({ length: 10 }, (_, index) => {
+        return normalizeCalculator(parsed.calculators?.[index])
+      }),
+    }
+  } catch {
+    return defaultState
+  }
+}
+
+function normalizeCalculator(input?: Partial<CalculatorState>): CalculatorState {
+  const calculator = createDefaultCalculator(input?.type === 'abyss' ? 'abyss' : 'base')
+
+  if (input?.values) {
+    for (const [key, value] of Object.entries(input.values)) {
+      calculator.values[key] = String(value ?? '')
+    }
+  }
+
+  if (input?.enabled) {
+    for (const [key, value] of Object.entries(input.enabled)) {
+      calculator.enabled[key] = Boolean(value)
+    }
+  }
+
+  return calculator
+}
+
+function getAvailableKeys(type: CalculatorType): string[] {
+  const fields = type === 'base' ? baseFields : abyssFields
+  const keys = fields.map((field) => field.key)
+
+  if (type === 'abyss') {
+    for (const rune of runeGroups) {
+      keys.push(rune.directKey)
+
+      for (const quality of runeQualities) {
+        keys.push(getRuneCountKey(rune.key, quality.key))
+      }
+    }
+  }
+
+  return Array.from(new Set(keys))
+}
